@@ -1,9 +1,12 @@
-This repo contains salt LDAP plugins.  Current plugins are:
+# salt-ldap
 
-Module: an LDAP salt module which can perform searches against an LDAP server.
-Pillar: an LDAP pillar backend which can retrieve salt states and values from an LDAP directory.
+This repo contains some salt LDAP plugins.  Current plugins are:
 
-Module:
+ * Module: an LDAP salt module which can perform searches against an LDAP server.
+
+ * Pillar: an LDAP pillar backend which can retrieve salt states and values from an LDAP directory.
+
+## Module:
 
 Currently only a search function has been implemented as the module currently exists purely to
 support the pillar plugin.
@@ -13,9 +16,11 @@ ldap.search:
 Run an arbitrary LDAP query and return the results.
 
 CLI Examples::
+
     salt 'ldaphost' ldap.search "filter=cn=myhost"
 
 returns: 
+
     'myhost': { 'count': 1,
                 'results': [['cn=myhost,ou=hosts,o=acme,dc=local',
                     {'saltKeyValue': ['ntpserver=ntp.acme.local', 'foo=myfoo'],
@@ -27,7 +32,7 @@ option as key=value pairs, for example:
 
     salt 'ldaphost' ldap.search filter=cn=myhost dn=ou=hosts,o=acme,dc=local scope=1 attrs='' server='localhost' port='7393' tls=True bindpw='ssh'
 
-Module Config:
+### Module Config:
 
 Default values for all options with the expection of filter (which must be specified as an argument)
 can be placed in the minion config.  An example minion config snippet:
@@ -39,7 +44,7 @@ can be placed in the minion config.  An example minion config snippet:
     ldap.bindpw: sssssh
     ldap.attrs: [saltKeyValue, saltState]
 
-Pillar:
+## Pillar:
 
 This pillar module parses a config file specified in the salt master config, and
 executes a series of LDAP searches based on that config.  Data returned by these
@@ -48,7 +53,7 @@ overriding data found earlier on. The final result set is merged with the pillar
 data.
 
 
-Pillar Config:
+### Pillar Config:
 
 Load the pillar plugin by adding the following to your salt master config:
 
