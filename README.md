@@ -73,7 +73,8 @@ An example config file is included below:
         dn: o=test,o=acme,dc=local
         binddn: uid=admin,o=acme,dc=local
         bindpw: ssssh
-        attrs: [saltKeyValue, saltState]
+        attrs: [saltKeyValue]
+        lists: [saltList]
         scope: 1
 
     search_order:
@@ -92,30 +93,32 @@ An example config file is included below:
 
 The config file my be paramertised with grains (e.g. fqdn)
 
-Attributes tagged in the pillar config file ('attrs') are scannned for the
-'key=value' format.  Matches are written to the dictionary directly as:
-dict[key] = value
+Attributes tagged in the pillar config as 'attrs' or 'lists' are
+scanned for a 'key=value' format (non matching entires are ignored.
+
+Entries matching the 'attrs' tag overwrite previous values where
+the key matches a previous result.
+
+Entries matching the 'lists' tag are appended to list of values where
+the key matches a previous result.
+
+All Matching entries are then written directly to the pillar data
+dictionary as data[key] = value.
 
 For example, search result:
 
-    saltKeyValue': ['ntpserver=ntp.acme.local', 'foo=myfoo']
-    
+        { saltKeyValue': ['ntpserver=ntp.acme.local', 'foo=myfoo'],
+          'saltList': ['vhost=www.acme.net', 'vhost=www.acme.local' }
+
 is written to the pillar data dictionary as:
 
-    {'ntpserver': 'ntp.acme.local', 'foo': 'myfoo'}
+        { 'ntpserver': 'ntp.acme.local', 'foo': 'myfoo',
+           'vhost': ['www.acme.net', 'www.acme.local' }
 
-
-Schema:
+### Schema:
 
 The attributes specified in both the module and pillar plugin use a custom schema, but any existing 
 LDAP attributes can be used if this is preferred.  For reference the following schema additions (use your own OID space) were used to implement the SaltKeyValue and SaltState attributes in my particular environment:
-
-    attributetype (  1.3.6.1.4.1.25593.2.1.1.10.10
-    NAME 'saltState'
-    DESC 'Salt State'
-    EQUALITY caseIgnoreMatch
-    SUBSTR caseIgnoreSubstringsMatch
-    SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
 
     attributetype ( 1.3.6.1.4.1.25593.2.1.1.10.11
     NAME 'saltKeyValue'
@@ -124,8 +127,15 @@ LDAP attributes can be used if this is preferred.  For reference the following s
     SUBSTR caseIgnoreSubstringsMatch
     SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
 
+    attributetype ( 1.3.6.1.4.1.25593.2.1.1.10.12
+    NAME 'saltList'
+    DESC 'Salt data expressed as a list'
+    EQUALITY caseIgnoreMatch
+    SUBSTR caseIgnoreSubstringsMatch
+    SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
+
     objectclass ( 1.3.6.1.4.1.25593.2.1.2.12 
     NAME 'saltData' 
     DESC 'Salt Data objectclass'
     SUP top AUXILIARY
-    MAY ( saltstate $ saltkeyvalue ) )
+    MAY ( saltkeyvalue $ saltlist ) )

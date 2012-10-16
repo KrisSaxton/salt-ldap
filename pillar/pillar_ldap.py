@@ -58,35 +58,51 @@ def _config(name, conf):
         value = None
     return value
 
-def _result_to_dict(data, attrs=None):
+def _result_to_dict(data, result, conf):
     '''
-    Formats LDAP search results as a pillar dictionary.
-    Attributes tagged in the pillar config file ('attrs') are scannned for the
-    'key=value' format.  Matches are written to the dictionary directly as:
-    dict[key] = value
+    Aggregates LDAP search result based on rules, returns a dictionary.
+    
+    Rules:
+    Attributes tagged in the pillar config as 'attrs' or 'lists' are 
+    scanned for a 'key=value' format (non matching entires are ignored.  
+    
+    Entries matching the 'attrs' tag overwrite previous values where 
+    the key matches a previous result.
+
+    Entries matching the 'lists' tag are appended to list of values where
+    the key matches a previous result.  
+
+    All Matching entries are then written directly to the pillar data 
+    dictionary as data[key] = value.
+
     For example, search result:
 
-        saltKeyValue': ['ntpserver=ntp.acme.local', 'foo=myfoo']
+        { saltKeyValue': ['ntpserver=ntp.acme.local', 'foo=myfoo'], 
+          'saltList': ['vhost=www.acme.net', 'vhost=www.acme.local' }
     
     is written to the pillar data dictionary as:
 
-        {'ntpserver': 'ntp.acme.local', 'foo': 'myfoo'}
+        { 'ntpserver': 'ntp.acme.local', 'foo': 'myfoo',
+           'vhost': ['www.acme.net', 'www.acme.local' }
     '''
-    
-    if not attrs:
-        attrs = []
-    result = {}
-    for key in data:
+    attrs = _config('attrs', conf) or []
+    lists = _config('lists', conf) or []
+    for key in result:
         if key in attrs:
-            for item in data.get(key):
+            for item in result.get(key):
                 if '=' in item:
-                    k, v = item.split('=')
-                    result[k] = v
-                else:
-                    result[key] = data.get(key)
-        else:
-            result[key] = data.get(key)
-    return result
+                    k, v = item.split('=', 1)
+                    data[k] = v
+        elif key in lists:
+            for item in result.get(key):
+                if '=' in item:
+                    k, v = item.split('=', 1)
+                    if not k in data:
+                        data[k] = [v]
+                    else:
+                        data[k].append(v)
+    print 'Returning data %s' % data
+    return data
 
 def _do_search(conf):
     '''
@@ -104,16 +120,21 @@ def _do_search(conf):
         raise SaltInvocationError('missing filter')
     dn = _config('dn', conf)
     scope = _config('scope', conf) 
-    attrs = _config('attrs', conf) 
+    _lists = _config('lists', conf) or []
+    _attrs = _config('attrs', conf) or []
+    attrs = _lists + _attrs
+    if not attrs:
+        attrs = None
     # Perform the search
     try:
-       raw_result = __salt__['ldap.search'](filter, dn, scope, attrs, **connargs)['results'][0][1]
+       result = __salt__['ldap.search'](filter, dn, scope, attrs, **connargs)['results'][0][1]
+       log.debug('LDAP search returned no results for filter {0}'.format(filter))
+    except IndexError: # we got no results for this search
+       result = {}
     except Exception:
         msg = traceback.format_exc()
         log.critical('Failed to retrieve pillar data from LDAP: {0}'.format(msg))
         return {}
-    if raw_result:
-        result = _result_to_dict(raw_result, attrs)
     return result
 
 def ext_pillar(config_file):
@@ -140,6 +161,7 @@ def ext_pillar(config_file):
     for source in opts['search_order']:
         config = opts[source]
         result = _do_search(config)
+        print 'source %s got result %s' % (source, result)
         if result:
-            data.update(result)
+            data = _result_to_dict(data, result, config)
     return data
