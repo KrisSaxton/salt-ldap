@@ -139,3 +139,45 @@ LDAP attributes can be used if this is preferred.  For reference the following s
     DESC 'Salt Data objectclass'
     SUP top AUXILIARY
     MAY ( saltkeyvalue $ saltlist ) )
+
+## Auth
+
+This external authentication modules allows users to authenticate against
+an LDAP directory.
+
+### Config
+
+Currently the configuration information to make the initial LDAP connection is
+stored in the ldap.py module itself.  Hopefully this can be externalised into 
+its own configuration file at some point.
+
+To update the LDAP connection information, edit the __opts__ dictionary near the top of ./salt/auth/ldap.py
+
+# Defaults, should really go into the master config
+__opts__ = {'server': 'localhost',
+            'port': '389',
+            'tls': False,
+            'scope': 2,
+            'basedn': 'o=acme,c=gb',
+            'binddn': 'uid=admin,o=acme,c=gb',
+            'bindpw': 'sssssh',
+            'filter': 'emailAddress={{ username }}'}
+
+### Usage
+
+Configure the areas of salt where you want external authentication to apply
+in the master config file.  For example:
+
+external_auth:          <<<< user external authentication
+  ldap:                 <<<< user the LDAP external authentication module 
+    kris@acme.com:      <<<< username to which the following rules apply
+      - 'saltdev':      <<<< minions to which the user has access
+        - test.*        <<<< salt modules to which the user has access
+
+
+On the command line the user 'kris@acme.com' can run any of the 'test' module methods on the minion 'saltdev' by successfully authenticating to LDAP.  The salt command using external authentication looks like the following:
+
+    salt -a ldap 'saltdev' test.ping
+username: kris@acme.com
+password: 
+saltdev: True
