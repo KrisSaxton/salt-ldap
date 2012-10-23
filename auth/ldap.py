@@ -11,7 +11,7 @@ import logging
 import traceback
 
 # Import Salt libs
-from salt.exceptions import CommandExecutionError
+from salt.exceptions import CommandExecutionError, SaltInvocationError
 
 # Import third party libs
 from jinja2 import Environment
@@ -24,15 +24,27 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
-# Defaults, should really go into the master config
-__opts__ = {'server': 'localhost',
-            'port': '389',
-            'tls': False,
-            'scope': 2,
-            'basedn': 'o=acme,c=gb',
-            'binddn': 'uid=admin,o=acme,c=gb',
-            'bindpw': 'sssssh',
-            'filter': 'emailAddress={{ username }}'}
+# Defaults, override in master config
+__defopts__ = {'auth.ldap.server': 'localhost',
+               'auth.ldap.port': '389',
+               'auth.ldap.tls': False,
+               'auth.ldap.scope': 2
+               }
+
+
+def _config(key):
+    '''
+    Return a value for 'name' from master config file options or defaults.
+    '''
+    try:
+        value = __opts__['auth.ldap.{0}'.format(key)]
+    except KeyError:
+        try:
+            value = __defopts__['auth.ldap.{0}'.format(key)]
+        except KeyError:
+            msg = 'missing auth.ldap.{0} in master config'.format(key)
+            raise SaltInvocationError(msg)
+    return value
 
 
 def _render_template(filter, username):
@@ -72,25 +84,24 @@ class _LDAPConnection:
             raise CommandExecutionError(msg)
 
 
-def auth(username, password, **kwargs):
+def auth(username, password):
     '''
     Authenticate via an LDAP bind
     '''
-    # Get default config, create connection dictionary
-    filter = _render_template(__opts__['filter'], username)
-    dn = __opts__['basedn']
-    scope = __opts__['scope']
+    # Get config params; create connection dictionary
+    filter = _render_template(_config('filter'), username)
+    basedn = _config('basedn')
+    scope = _config('scope')
     connargs = {}
     for name in ['server', 'port', 'tls', 'binddn', 'bindpw']:
-        connargs[name] = __opts__[name]
-
-    # Initial connection with config dn and password
+        connargs[name] = _config(name)
+    # Initial connection with config basedn and bindpw
     _ldap = _LDAPConnection(**connargs).LDAP
     # Search for user dn
     msg = 'Running LDAP user dn search with filter:%s, dn:%s, scope:%s' %\
-        (filter, dn, scope)
+        (filter, basedn, scope)
     log.debug(msg)
-    result = _ldap.search_s(dn, int(scope), filter)
+    result = _ldap.search_s(basedn, int(scope), filter)
     if len(result) < 1:
         log.warn('Unable to find user {0}'.format(username))
         return False

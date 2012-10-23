@@ -6,6 +6,8 @@ This repo contains some salt LDAP plugins.  Current plugins are:
 
  * Pillar: an LDAP pillar backend which can retrieve salt states and values from an LDAP directory.
 
+ * Auth: an LDAP external authentication backend.
+
 ## Module:
 
 Currently only a search function has been implemented as the module currently exists purely to
@@ -142,42 +144,53 @@ LDAP attributes can be used if this is preferred.  For reference the following s
 
 ## Auth
 
-This external authentication modules allows users to authenticate against
-an LDAP directory.
+This external authentication modules allows users to authenticate against an LDAP directory.
 
 ### Config
 
-Currently the configuration information to make the initial LDAP connection is
-stored in the ldap.py module itself.  Hopefully this can be externalised into 
-its own configuration file at some point.
+The configuration information to activate external authentication using this module and to make the initial LDAP connection is stored in the master config.  
 
-To update the LDAP connection information, edit the __opts__ dictionary near the top of ./salt/auth/ldap.py
+First, configure the areas of salt where you want external authentication to apply. For example:
+ 
+    external_auth:          <<<< enable external authentication
+      ldap:                 <<<< use the LDAP external authentication module 
+        kris@acme.com:      <<<< username to which the following rules apply
+          - 'saltdev':      <<<< minions to which the user has access
+            - test.*        <<<< salt modules to which the user has access
 
-# Defaults, should really go into the master config
-__opts__ = {'server': 'localhost',
-            'port': '389',
-            'tls': False,
-            'scope': 2,
-            'basedn': 'o=acme,c=gb',
-            'binddn': 'uid=admin,o=acme,c=gb',
-            'bindpw': 'sssssh',
-            'filter': 'emailAddress={{ username }}'}
+Second, configure the LDAP connection information, this is used to make the initial LDAP bind when searching for the user dn.
+
+As a minimum you will need:
+
+    auth.ldap.basedn: <base dn for user search>
+    auth.ldap.binddn: <bind dn for user search>
+    auth.ldap.bindpw: <password for user search>
+    auth.ldap.filter: <filter for user search> - (also see below)
+
+NB The filter can (and normally should) contain the special string
+
+  {{ username }}
+
+as part of the search filter.  This string (including the braces) will be substituted for the value of the username supplied by the user as part of authentication.  For example:
+
+    auth.ldap.filter: emailAddress={{ username }}
+
+If a user supplies the username 'kris@acme.com' when authenticating the final filter which will be used to search for the user dn will be:
+
+    auth.ldap.filter: emailAddress=kris@acme.com
+
+In addition, the following configuration items are as permitted:
+
+    auth.ldap.server: <LDAP server> - default: localhost
+    auth.ldap.port: <LDAP server port> - default: 389
+    auth.ldap.tls: <Use TLS?> - default: False
+    auth.ldap.scope: <LDAP search scope> - default: 2 (sub)
 
 ### Usage
 
-Configure the areas of salt where you want external authentication to apply
-in the master config file.  For example:
-
-external_auth:          <<<< user external authentication
-  ldap:                 <<<< user the LDAP external authentication module 
-    kris@acme.com:      <<<< username to which the following rules apply
-      - 'saltdev':      <<<< minions to which the user has access
-        - test.*        <<<< salt modules to which the user has access
-
-
-On the command line the user 'kris@acme.com' can run any of the 'test' module methods on the minion 'saltdev' by successfully authenticating to LDAP.  The salt command using external authentication looks like the following:
+Using the configuration example describe above, the user salt user 'kris@acme.com' can run any of the 'test' module methods on the minion 'saltdev' by successfully authenticating to LDAP.  The salt command using external authentication looks like the following:
 
     salt -a ldap 'saltdev' test.ping
-username: kris@acme.com
-password: 
-saltdev: True
+    username: kris@acme.com
+    password: 
+    saltdev: True
